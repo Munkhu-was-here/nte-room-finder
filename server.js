@@ -54,7 +54,6 @@ function cleanRoom(room, revealId = false) {
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, app: 'NTE Room Finder' });
 });
-let cached = global.mongoose;
 
 if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
