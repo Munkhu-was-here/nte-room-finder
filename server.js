@@ -32,7 +32,7 @@ const roomSchema = new mongoose.Schema({
   expiresAt: { type: Date, default: () => new Date(Date.now() + 60 * 60 * 1000), index: { expires: 0 } }
 }, { timestamps: true });
 
-const Room = mongoose.model('Room', roomSchema);
+const Room = mongoose.models.Room || mongoose.model('Room', roomSchema);
 
 function cleanRoom(room, revealId = false) {
   return {
