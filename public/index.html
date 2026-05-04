@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NTE Room Finder</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <header class="hero">
+    <nav>
+      <div class="brand"><span>NTE</span> Room Finder</div>
+      <button id="refreshBtn" class="ghost">Refresh</button>
+    </nav>
+    <section class="hero-grid">
+      <div>
+        <p class="eyebrow">Neverness to Everness player ID lobby</p>
+        <h1>Play with people.</h1>
+        <p class="hero-text">It's not the private server. This is just to help people find each other. Please be respectful and follow the game rules. Happy exploring!
+          Requires:
+           Level 6-8.
+           In multiplayer section make sure turn on "Requires approval" not "Private, Friends only". if that turned off you can't play with people outside your friend list.
+        </p>
+      </div>
+      <form id="createRoomForm" class="panel form-card">
+        <h2>Create Room</h2>
+        <input name="title" placeholder="Room name: City explore" required maxlength="60" />
+        <div class="two">
+          <input name="hostName" placeholder="Host name" required maxlength="32" />
+          <input name="hostNteId" placeholder="Your NTE ID" required maxlength="40" />
+        </div>
+        <div class="two">
+          <select name="serverRegion">
+            <option>Asia</option><option>Europe</option><option>America</option><option>Other</option>
+          </select>
+          <select name="activity">
+            <option>Explore</option><option>Quest</option><option>Photo / Chill</option>
+          </select>
+        </div>
+        <div class="two">
+          <input name="maxPlayers" type="number" min="2" max="4" value="4" />
+          <input name="password" placeholder="Password optional" maxlength="40" />
+        </div>
+        <textarea name="note" placeholder="Note: Mic optional(Game have room chat)" maxlength="160"></textarea>
+        <button class="primary" type="submit">Create Room</button>
+        <p id="formMessage" class="message"></p>
+      </form>
+    </section>
+  </header>
+
+  <main>
+    <section class="toolbar">
+      <div>
+        <h2>Active rooms</h2>
+        <p>Host ID only visible after joining</p>
+      </div>
+      <input id="searchInput" placeholder="Search room, activity, region..." />
+    </section>
+    <section id="rooms" class="rooms"></section>
+  </main>
+
+  <dialog id="joinDialog">
+    <form method="dialog" class="dialog-card">
+      <button class="close" value="cancel">×</button>
+      <h2 id="dialogTitle">Join room</h2>
+      <p id="dialogInfo"></p>
+      <input id="joinPassword" placeholder="Password if needed" />
+      <button id="confirmJoin" class="primary" type="button">Join & reveal ID</button>
+      <div id="revealBox" class="reveal hidden"></div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
