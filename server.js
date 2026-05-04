@@ -4,20 +4,47 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-
-function nanoid(size = 8) {
-  return crypto.randomBytes(size).toString('hex').slice(0, size);
-}
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// nanoid replacement
+function nanoid(size = 8) {
+  return crypto.randomBytes(size).toString('hex').slice(0, size);
+}
+
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+
+// ✅ 1. SCHEMA ЭХЭЛЖ
+const roomSchema = new mongoose.Schema({
+  code: { type: String, unique: true, index: true },
+  title: { type: String, required: true },
+  hostName: { type: String, required: true },
+  hostNteId: { type: String, required: true },
+  serverRegion: { type: String, default: 'Asia' },
+  activity: { type: String, default: 'Explore' },
+  maxPlayers: { type: Number, default: 4 },
+  currentPlayers: { type: Number, default: 1 },
+  note: { type: String, default: '' },
+  isLocked: { type: Boolean, default: false },
+  password: { type: String, default: '' },
+  expiresAt: {
+    type: Date,
+    default: () => new Date(Date.now() + 60 * 60 * 1000),
+    index: { expires: 0 }
+  }
+}, { timestamps: true });
+
+
+// ✅ 2. ДАРАА НЬ MODEL
 const Room = mongoose.models.Room || mongoose.model('Room', roomSchema);
 
+
+// ✅ 3. DB CACHE (1 удаа л!)
 let cached = global.mongooseCache;
 
 if (!cached) {
@@ -39,6 +66,8 @@ async function connectDB() {
   return cached.conn;
 }
 
+
+// ✅ 4. DB middleware (1 удаа)
 app.use(async (req, res, next) => {
   if (!req.path.startsWith('/api')) return next();
 
@@ -51,22 +80,8 @@ app.use(async (req, res, next) => {
   }
 });
 
-const roomSchema = new mongoose.Schema({
-  code: { type: String, unique: true, index: true },
-  title: { type: String, required: true, trim: true, maxlength: 60 },
-  hostName: { type: String, required: true, trim: true, maxlength: 32 },
-  hostNteId: { type: String, required: true, trim: true, maxlength: 40 },
-  serverRegion: { type: String, default: 'Asia' },
-  activity: { type: String, default: 'Explore' },
-  maxPlayers: { type: Number, default: 4, min: 2, max: 8 },
-  currentPlayers: { type: Number, default: 1, min: 1 },
-  note: { type: String, default: '', trim: true, maxlength: 160 },
-  isLocked: { type: Boolean, default: false },
-  password: { type: String, default: '' },
-  expiresAt: { type: Date, default: () => new Date(Date.now() + 60 * 60 * 1000), index: { expires: 0 } }
-}, { timestamps: true });
 
-
+// 🔧 Helper
 function cleanRoom(room, revealId = false) {
   return {
     code: room.code,
@@ -84,22 +99,22 @@ function cleanRoom(room, revealId = false) {
   };
 }
 
+
+// API ROUTES
+
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, app: 'NTE Room Finder' });
+  res.json({ ok: true });
 });
-
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
-
 
 app.get('/api/rooms', async (req, res) => {
   try {
     const rooms = await Room.find({ expiresAt: { $gt: new Date() } })
       .sort({ createdAt: -1 })
       .limit(50);
-    res.json(rooms.map(room => cleanRoom(room, false)));
+
+    res.json(rooms.map(r => cleanRoom(r)));
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Can not load rooms.' });
   }
 });
@@ -109,7 +124,7 @@ app.post('/api/rooms', async (req, res) => {
     const { title, hostName, hostNteId, serverRegion, activity, maxPlayers, note, password } = req.body;
 
     if (!title || !hostName || !hostNteId) {
-      return res.status(400).json({ message: 'Room name, host name, NTE ID шаардлагатай.' });
+      return res.status(400).json({ message: 'Required fields missing' });
     }
 
     const room = await Room.create({
@@ -127,60 +142,55 @@ app.post('/api/rooms', async (req, res) => {
 
     res.status(201).json(cleanRoom(room, true));
   } catch (error) {
-    res.status(500).json({ message: 'Өрөө үүсгэж чадсангүй.' });
+    console.error(error);
+    res.status(500).json({ message: 'Create room failed' });
   }
 });
 
 app.post('/api/rooms/:code/join', async (req, res) => {
   try {
     const { password } = req.body;
-    const room = await Room.findOne({ code: req.params.code.toUpperCase(), expiresAt: { $gt: new Date() } });
 
-    if (!room) return res.status(404).json({ message: 'Өрөө олдсонгүй эсвэл хугацаа дууссан байна.' });
-    if (room.currentPlayers >= room.maxPlayers) return res.status(400).json({ message: 'Өрөө дүүрсэн байна.' });
-    if (room.isLocked && room.password !== password) return res.status(401).json({ message: 'Нууц үг буруу байна.' });
+    const room = await Room.findOne({
+      code: req.params.code.toUpperCase(),
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!room) return res.status(404).json({ message: 'Room not found' });
+    if (room.currentPlayers >= room.maxPlayers) return res.status(400).json({ message: 'Room full' });
+    if (room.isLocked && room.password !== password) return res.status(401).json({ message: 'Wrong password' });
 
     room.currentPlayers += 1;
     await room.save();
 
     res.json(cleanRoom(room, true));
   } catch (error) {
-    res.status(500).json({ message: 'An error occurred while entering the room.' });
+    console.error(error);
+    res.status(500).json({ message: 'Join failed' });
   }
 });
 
 app.delete('/api/rooms/:code', async (req, res) => {
   try {
-    const deleted = await Room.findOneAndDelete({ code: req.params.code.toUpperCase() });
-    if (!deleted) return res.status(404).json({ message: 'Өрөө олдсонгүй.' });
+    await Room.findOneAndDelete({ code: req.params.code.toUpperCase() });
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ message: 'Өрөө устгаж чадсангүй.' });
+    console.error(error);
+    res.status(500).json({ message: 'Delete failed' });
   }
 });
 
+
+// FRONTEND fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
 
-
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Database connection failed.' });
-  }
-});
-
+// LOCAL ONLY
 if (require.main === module) {
   connectDB().then(() => {
-    app.listen(PORT, () => console.log(`NTE Room Finder running on port ${PORT}`));
+    app.listen(PORT, () => console.log(`Running on ${PORT}`));
   });
 }
 
