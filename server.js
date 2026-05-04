@@ -3,7 +3,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const { nanoid } = require('nanoid');
+const crypto = require('crypto');
+
+function nanoid(size = 8) {
+  return crypto.randomBytes(size).toString('hex').slice(0, size);
+}
 const path = require('path');
 
 const app = express();
