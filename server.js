@@ -121,17 +121,41 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-async function start() {
-  if (!process.env.MONGODB_URI) {
-    console.error('MONGODB_URI .env файлд байх ёстой.');
-    process.exit(1);
-  }
+let cached = global.mongoose;
 
-  await mongoose.connect(process.env.MONGODB_URI);
-  app.listen(PORT, () => console.log(`NTE Room Finder running on port ${PORT}`));
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
 }
 
-start().catch(error => {
-  console.error(error);
-  process.exit(1);
+async function connectDB() {
+  if (cached.conn) return cached.conn;
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI missing');
+  }
+
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(process.env.MONGODB_URI);
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Database connection failed.' });
+  }
 });
+
+if (require.main === module) {
+  connectDB().then(() => {
+    app.listen(PORT, () => console.log(`NTE Room Finder running on port ${PORT}`));
+  });
+}
+
+module.exports = app;
