@@ -54,6 +54,38 @@ function cleanRoom(room, revealId = false) {
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, app: 'NTE Room Finder' });
 });
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
+async function connectDB() {
+  if (cached.conn) return cached.conn;
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI missing');
+  }
+
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(process.env.MONGODB_URI);
+  }
+
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
+
+app.use(async (req, res, next) => {
+  if (!req.path.startsWith('/api')) return next();
+
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('DB ERROR:', error);
+    res.status(500).json({ message: 'Database connection failed.' });
+  }
+});
 
 app.get('/api/rooms', async (req, res) => {
   try {
@@ -62,7 +94,7 @@ app.get('/api/rooms', async (req, res) => {
       .limit(50);
     res.json(rooms.map(room => cleanRoom(room, false)));
   } catch (error) {
-    res.status(500).json({ message: 'Өрөөнүүдийг ачаалж чадсангүй.' });
+    res.status(500).json({ message: 'Can not load rooms.' });
   }
 });
 
