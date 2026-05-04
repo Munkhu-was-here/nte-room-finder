@@ -16,47 +16,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-
-const roomSchema = new mongoose.Schema({
-  code: { type: String, unique: true, index: true },
-  title: { type: String, required: true, trim: true, maxlength: 60 },
-  hostName: { type: String, required: true, trim: true, maxlength: 32 },
-  hostNteId: { type: String, required: true, trim: true, maxlength: 40 },
-  serverRegion: { type: String, default: 'Asia' },
-  activity: { type: String, default: 'Explore' },
-  maxPlayers: { type: Number, default: 4, min: 2, max: 8 },
-  currentPlayers: { type: Number, default: 1, min: 1 },
-  note: { type: String, default: '', trim: true, maxlength: 160 },
-  isLocked: { type: Boolean, default: false },
-  password: { type: String, default: '' },
-  expiresAt: { type: Date, default: () => new Date(Date.now() + 60 * 60 * 1000), index: { expires: 0 } }
-}, { timestamps: true });
-
 const Room = mongoose.models.Room || mongoose.model('Room', roomSchema);
 
-function cleanRoom(room, revealId = false) {
-  return {
-    code: room.code,
-    title: room.title,
-    hostName: room.hostName,
-    hostNteId: revealId ? room.hostNteId : null,
-    serverRegion: room.serverRegion,
-    activity: room.activity,
-    maxPlayers: room.maxPlayers,
-    currentPlayers: room.currentPlayers,
-    note: room.note,
-    isLocked: room.isLocked,
-    expiresAt: room.expiresAt,
-    createdAt: room.createdAt
-  };
-}
-
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, app: 'NTE Room Finder' });
-});
+let cached = global.mongooseCache;
 
 if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+  cached = global.mongooseCache = { conn: null, promise: null };
 }
 
 async function connectDB() {
@@ -85,6 +50,48 @@ app.use(async (req, res, next) => {
     res.status(500).json({ message: 'Database connection failed.' });
   }
 });
+
+const roomSchema = new mongoose.Schema({
+  code: { type: String, unique: true, index: true },
+  title: { type: String, required: true, trim: true, maxlength: 60 },
+  hostName: { type: String, required: true, trim: true, maxlength: 32 },
+  hostNteId: { type: String, required: true, trim: true, maxlength: 40 },
+  serverRegion: { type: String, default: 'Asia' },
+  activity: { type: String, default: 'Explore' },
+  maxPlayers: { type: Number, default: 4, min: 2, max: 8 },
+  currentPlayers: { type: Number, default: 1, min: 1 },
+  note: { type: String, default: '', trim: true, maxlength: 160 },
+  isLocked: { type: Boolean, default: false },
+  password: { type: String, default: '' },
+  expiresAt: { type: Date, default: () => new Date(Date.now() + 60 * 60 * 1000), index: { expires: 0 } }
+}, { timestamps: true });
+
+
+function cleanRoom(room, revealId = false) {
+  return {
+    code: room.code,
+    title: room.title,
+    hostName: room.hostName,
+    hostNteId: revealId ? room.hostNteId : null,
+    serverRegion: room.serverRegion,
+    activity: room.activity,
+    maxPlayers: room.maxPlayers,
+    currentPlayers: room.currentPlayers,
+    note: room.note,
+    isLocked: room.isLocked,
+    expiresAt: room.expiresAt,
+    createdAt: room.createdAt
+  };
+}
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, app: 'NTE Room Finder' });
+});
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
 
 app.get('/api/rooms', async (req, res) => {
   try {
@@ -156,26 +163,10 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-let cached = global.mongoose;
-
 if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
 }
 
-async function connectDB() {
-  if (cached.conn) return cached.conn;
-
-  if (!process.env.MONGODB_URI) {
-    throw new Error('MONGODB_URI missing');
-  }
-
-  if (!cached.promise) {
-    cached.promise = mongoose.connect(process.env.MONGODB_URI);
-  }
-
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
 
 app.use(async (req, res, next) => {
   try {
